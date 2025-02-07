@@ -1,0 +1,44 @@
+controller:
+  # -------------------------------------------------------
+  # run tailscale-nginx-auth as sidecar
+  # -------------------------------------------------------
+  extraContainers:
+    - name: tailscale-nginx-auth
+      image: jaxxstorm/tailscale-nginx-auth:latest
+      imagePullPolicy: Always
+      env:
+        - name: TS_NGINX_AUTH_EPHEMERAL
+          value: "true"
+        - name: TS_NGINX_AUTH_DEBUG
+          value: "true"
+        - name: TS_NGINX_AUTH_PORT
+          value: "8080"
+      envFrom:
+        - secretRef:
+            name: tailscale-nginx-auth-secrets
+      ports:
+        - name: auth
+          containerPort: 8080
+
+  # -------------------------------------------------------
+  # Tell NGINX “use the sidecar on localhost:8080 for global auth”
+  # -------------------------------------------------------
+  config:
+    global-auth-url: "http://127.0.0.1:8080/"
+    global-auth-method: GET
+    global-auth-request-redirect: $request_uri
+    global-auth-response-headers: Tailscale-User
+    global-auth-snippet: |
+      # Provide helpful headers to tailscale-nginx-auth sidecar
+      proxy_set_header X-Original-URI $request_uri;
+      proxy_set_header X-Real-IP      $remote_addr;
+      proxy_set_header X-Forwarded-For $remote_addr;
+  hostNetwork: false
+
+  service:
+    loadBalancerClass: tailscale
+
+  ingressClassResource:
+    name: ts
+    default: false
+    controllerValue: "k8s.io/ingress-nginx/ts"

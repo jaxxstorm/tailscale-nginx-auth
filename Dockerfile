@@ -1,0 +1,26 @@
+# syntax=docker/dockerfile:1
+
+FROM cgr.dev/chainguard/go:latest AS builder
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy the remaining project files
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux go build -o /src/tailscale-nginx-auth .
+
+FROM cgr.dev/chainguard/static:latest
+
+# Default to port 8080, but it can be overridden at runtime
+ENV TS_NGINX_AUTH_PORT=8080
+
+# Copy the binary from the builder stage
+COPY --from=builder /src/tailscale-nginx-auth /usr/local/bin/tailscale-nginx-auth
+
+EXPOSE 8080
+
+# Launch
+ENTRYPOINT ["/usr/local/bin/tailscale-nginx-auth"]
